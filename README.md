@@ -1,0 +1,2 @@
+# nacos
+Kratos Nacos Registry
