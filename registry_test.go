@@ -14,7 +14,7 @@ import (
 
 func TestRegistry_Register(t *testing.T) {
 	sc := []constant.ServerConfig{
-		*constant.NewServerConfig("nacos-dev-hwy.mangguonews.com", 8848),
+		*constant.NewServerConfig("127.0.0.1", 8848),
 	}
 
 	cc := constant.ClientConfig{
@@ -23,10 +23,7 @@ func TestRegistry_Register(t *testing.T) {
 		NotLoadCacheAtStart: true,
 		LogDir:              "/tmp/nacos/log",
 		CacheDir:            "/tmp/nacos/cache",
-		LogRollingConfig: &constant.ClientLogRollingConfig{
-			MaxAge: 3,
-		},
-		LogLevel: "debug",
+		LogLevel:            "debug",
 	}
 
 	// a more graceful way to create naming client
@@ -241,8 +238,7 @@ func TestRegistry_Deregister(t *testing.T) {
 					NotLoadCacheAtStart: true,
 					LogDir:              "/tmp/nacos/log",
 					CacheDir:            "/tmp/nacos/cache",
-
-					LogLevel: "debug",
+					LogLevel:            "debug",
 				}
 
 				// a more graceful way to create naming client
@@ -301,8 +297,7 @@ func TestRegistry_Deregister(t *testing.T) {
 				NotLoadCacheAtStart: true,
 				LogDir:              "/tmp/nacos/log",
 				CacheDir:            "/tmp/nacos/cache",
-
-				LogLevel: "debug",
+				LogLevel:            "debug",
 			}
 
 			// a more graceful way to create naming client
@@ -337,8 +332,7 @@ func TestRegistry_GetService(t *testing.T) {
 		NotLoadCacheAtStart: true,
 		LogDir:              "/tmp/nacos/log",
 		CacheDir:            "/tmp/nacos/cache",
-
-		LogLevel: "debug",
+		LogLevel:            "debug",
 	}
 
 	// a more graceful way to create naming client
@@ -452,8 +446,7 @@ func TestRegistry_Watch(t *testing.T) {
 		NotLoadCacheAtStart: true,
 		LogDir:              "/tmp/nacos/log",
 		CacheDir:            "/tmp/nacos/cache",
-
-		LogLevel: "debug",
+		LogLevel:            "debug",
 	}
 
 	// a more graceful way to create naming client
