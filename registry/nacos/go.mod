@@ -1,4 +1,4 @@
-module github.com/xushuhui/nacos
+module github.com/xushuhui/kratos-contrib/registry/nacos/v2
 
 go 1.20
 

@@ -3,12 +3,12 @@ package nacos
 import (
 	"context"
 	"fmt"
+	"log"
 
+	"github.com/go-kratos/kratos/v2/registry"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/naming_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/model"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
-
-	"github.com/go-kratos/kratos/v2/registry"
 )
 
 var _ registry.Watcher = (*watcher)(nil)
@@ -34,8 +34,7 @@ func newWatcher(ctx context.Context, cli naming_client.INamingClient, serviceNam
 		watchChan:   make(chan struct{}, 1),
 	}
 	w.ctx, w.cancel = context.WithCancel(ctx)
-
-	e := w.cli.Subscribe(&vo.SubscribeParam{
+	err := w.cli.Subscribe(&vo.SubscribeParam{
 		ServiceName: serviceName,
 		Clusters:    clusters,
 		GroupName:   groupName,
@@ -43,7 +42,11 @@ func newWatcher(ctx context.Context, cli naming_client.INamingClient, serviceNam
 			w.watchChan <- struct{}{}
 		},
 	})
-	return w, e
+	if err != nil {
+		return nil, err
+	}
+
+	return w, nil
 }
 
 func (w *watcher) Next() ([]*registry.ServiceInstance, error) {
@@ -78,10 +81,14 @@ func (w *watcher) Next() ([]*registry.ServiceInstance, error) {
 }
 
 func (w *watcher) Stop() error {
-	w.cancel()
-	return w.cli.Unsubscribe(&vo.SubscribeParam{
+	err := w.cli.Unsubscribe(&vo.SubscribeParam{
 		ServiceName: w.serviceName,
 		GroupName:   w.groupName,
 		Clusters:    w.clusters,
+		SubscribeCallback: func(services []model.Instance, err error) {
+			log.Printf("\n\n Stop return services:%s \n\n", w.serviceName)
+		},
 	})
+	w.cancel()
+	return err
 }
