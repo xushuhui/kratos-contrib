@@ -12,7 +12,7 @@ import (
 )
 const (
 	addr = ""
-	namespaceId = "dev"
+	namespaceId = "public"
 )
 func TestConfig_Load(t *testing.T) {
 	sc := []constant.ServerConfig{
@@ -24,7 +24,6 @@ func TestConfig_Load(t *testing.T) {
 		NotLoadCacheAtStart: true,
 		LogDir:              "/tmp/nacos/log",
 		CacheDir:            "/tmp/nacos/cache",
-
 		LogLevel: "debug",
 	}
 

@@ -68,7 +68,7 @@ type Registry struct {
 func New(cli naming_client.INamingClient, opts ...Option) (r *Registry) {
 	op := options{
 		prefix:  "/microservices",
-		cluster: "DEFAULT",
+		cluster: "",
 		group:   constant.DEFAULT_GROUP,
 		weight:  100,
 		kind:    "grpc",
@@ -121,7 +121,7 @@ func (r *Registry) Register(_ context.Context, si *registry.ServiceInstance) err
 			Weight:      r.opts.weight,
 			Enable:      true,
 			Healthy:     true,
-			Ephemeral:   true,
+			Ephemeral:   false,
 			Metadata:    rmd,
 			ClusterName: r.opts.cluster,
 			GroupName:   r.opts.group,

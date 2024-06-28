@@ -3,7 +3,6 @@ package nacos
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/go-kratos/kratos/v2/registry"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/naming_client"
@@ -14,14 +13,15 @@ import (
 var _ registry.Watcher = (*watcher)(nil)
 
 type watcher struct {
-	serviceName string
-	clusters    []string
-	groupName   string
-	ctx         context.Context
-	cancel      context.CancelFunc
-	watchChan   chan struct{}
-	cli         naming_client.INamingClient
-	kind        string
+	serviceName    string
+	clusters       []string
+	groupName      string
+	ctx            context.Context
+	cancel         context.CancelFunc
+	watchChan      chan struct{}
+	cli            naming_client.INamingClient
+	kind           string
+	subscribeParam *vo.SubscribeParam
 }
 
 func newWatcher(ctx context.Context, cli naming_client.INamingClient, serviceName, groupName, kind string, clusters []string) (*watcher, error) {
@@ -34,18 +34,26 @@ func newWatcher(ctx context.Context, cli naming_client.INamingClient, serviceNam
 		watchChan:   make(chan struct{}, 1),
 	}
 	w.ctx, w.cancel = context.WithCancel(ctx)
-	err := w.cli.Subscribe(&vo.SubscribeParam{
+
+	w.subscribeParam = &vo.SubscribeParam{
 		ServiceName: serviceName,
 		Clusters:    clusters,
 		GroupName:   groupName,
 		SubscribeCallback: func(services []model.Instance, err error) {
-			w.watchChan <- struct{}{}
+			select {
+			case w.watchChan <- struct{}{}:
+			default:
+			}
 		},
-	})
-	if err != nil {
-		return nil, err
 	}
-
+	e := w.cli.Subscribe(w.subscribeParam)
+	if e != nil {
+		return nil,e
+	}
+	select {
+	case w.watchChan <- struct{}{}:
+	default:
+	}
 	return w, nil
 }
 
@@ -55,6 +63,7 @@ func (w *watcher) Next() ([]*registry.ServiceInstance, error) {
 		return nil, w.ctx.Err()
 	case <-w.watchChan:
 	}
+	
 	res, err := w.cli.GetService(vo.GetServiceParam{
 		ServiceName: w.serviceName,
 		GroupName:   w.groupName,
@@ -81,14 +90,7 @@ func (w *watcher) Next() ([]*registry.ServiceInstance, error) {
 }
 
 func (w *watcher) Stop() error {
-	err := w.cli.Unsubscribe(&vo.SubscribeParam{
-		ServiceName: w.serviceName,
-		GroupName:   w.groupName,
-		Clusters:    w.clusters,
-		SubscribeCallback: func(services []model.Instance, err error) {
-			log.Printf("\n\n Stop return services:%s \n\n", w.serviceName)
-		},
-	})
+	err := w.cli.Unsubscribe(w.subscribeParam)
 	w.cancel()
 	return err
 }
