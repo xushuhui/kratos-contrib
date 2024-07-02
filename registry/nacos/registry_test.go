@@ -469,7 +469,7 @@ func TestRegistry_Watch(t *testing.T) {
 
 	testServer := &registry.ServiceInstance{
 		ID:        "",
-		Name:      "test5",
+		Name:      "test4",
 		Version:   "v1.0.0",
 		Endpoints: []string{"grpc://127.0.0.1:8080?isSecure=false"},
 	}
@@ -502,7 +502,7 @@ func TestRegistry_Watch(t *testing.T) {
 			wantErr: false,
 			want: []*registry.ServiceInstance{{
 				ID:        "",
-				Name:      "test5",
+				Name:      "test4",
 				Version:   "v1.0.0",
 				Metadata:  map[string]string{"version": "v1.0.0", "kind": "grpc"},
 				Endpoints: []string{"grpc://127.0.0.1:8080"},
@@ -557,12 +557,10 @@ func TestRegistry_Watch(t *testing.T) {
 				tt.processFunc(t)
 			}
 			want, err := watch.Next()
-			
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Watch error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-
 			if !reflect.DeepEqual(want, tt.want) {
 				t.Errorf("Watch watcher = %v, want %v", watch, tt.want)
 			}

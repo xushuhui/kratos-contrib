@@ -121,7 +121,7 @@ func (r *Registry) Register(_ context.Context, si *registry.ServiceInstance) err
 			Weight:      r.opts.weight,
 			Enable:      true,
 			Healthy:     true,
-			Ephemeral:   false,
+			Ephemeral:   true,
 			Metadata:    rmd,
 			ClusterName: r.opts.cluster,
 			GroupName:   r.opts.group,
