@@ -454,7 +454,7 @@ func TestRegistry_Watch(t *testing.T) {
 		LogLevel:             "debug",
 		
 	}
-
+	
 	// a more graceful way to create naming client
 	client, err := clients.NewNamingClient(
 		vo.NacosClientParam{
