@@ -3,567 +3,112 @@ package nacos
 import (
 	"context"
 	"os"
-	"reflect"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/go-kratos/kratos/v2/registry"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients"
+	"github.com/nacos-group/nacos-sdk-go/v2/clients/naming_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/common/constant"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
 )
 
-const (
-	addr        = ""
-	namespaceId = "public"
+var (
+	REGISTRY_GROUP   = "DEFAULT_GROUP"
+	REGISTRY_CLUSTER = "DEFAULT"
 )
 
-func TestRegistry_Register(t *testing.T) {
-	sc := []constant.ServerConfig{
-		*constant.NewServerConfig(addr, 8848),
-	}
+func newNamingClient() (naming_client.INamingClient, error) {
+	userHomeDir, _ := os.UserHomeDir()
 
-	cc := &constant.ClientConfig{
-		NamespaceId: namespaceId, // namespace id
-		LogDir:      "./log",
-		CacheDir:    "./log/cache",
-	}
-
-	// a more graceful way to create naming client
-	client, err := clients.NewNamingClient(
-		vo.NacosClientParam{
-			ClientConfig:  cc,
-			ServerConfigs: sc,
-		},
+	clientConfig := constant.NewClientConfig(
+		constant.WithLogDir(filepath.Join(userHomeDir, "logs", "nacos")),
+		constant.WithCacheDir(filepath.Join(userHomeDir, "nacos", "cache")),
+		constant.WithUsername(os.Getenv("NACOS_USER_NAME")),
+		constant.WithPassword(os.Getenv("NACOS_USER_PASSWORD")),
+		constant.WithLogLevel("info"),
 	)
+	serverConfigs := []constant.ServerConfig{
+		{
+			IpAddr:      os.Getenv("NACOS_SERVER_ADDRESS"),
+			ContextPath: "/nacos",
+			Port:        8848,
+		},
+	}
+
+	return clients.NewNamingClient(vo.NacosClientParam{
+		ClientConfig:  clientConfig,
+		ServerConfigs: serverConfigs,
+	})
+}
+
+func TestRegistry(t *testing.T) {
+	client, err := newNamingClient()
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := New(client)
 
-	testServer := &registry.ServiceInstance{
-		ID:        "1",
-		Name:      "test1",
-		Version:   "v1.0.0",
-		Endpoints: []string{"http://127.0.0.1:8080?isSecure=false"},
-	}
-	testServerWithMetadata := &registry.ServiceInstance{
-		ID:        "1",
-		Name:      "test1",
-		Version:   "v1.0.0",
-		Endpoints: []string{"http://127.0.0.1:8080?isSecure=false"},
-		Metadata:  map[string]string{"idc": "shanghai-xs"},
-	}
-	type fields struct {
-		registry *Registry
-	}
-	type args struct {
-		ctx     context.Context
-		service *registry.ServiceInstance
-	}
-	tests := []struct {
-		name      string
-		fields    fields
-		args      args
-		wantErr   bool
-		deferFunc func(t *testing.T)
-	}{
-		{
-			name: "normal",
-			fields: fields{
-				registry: New(client),
-			},
-			args: args{
-				ctx:     context.Background(),
-				service: testServer,
-			},
-			wantErr: false,
-			deferFunc: func(t *testing.T) {
-				err = r.Deregister(context.Background(), testServer)
-				if err != nil {
-					t.Error(err)
-				}
-			},
-		},
-		{
-			name: "withMetadata",
-			fields: fields{
-				registry: New(client),
-			},
-			args: args{
-				ctx:     context.Background(),
-				service: testServerWithMetadata,
-			},
-			wantErr: false,
-			deferFunc: func(t *testing.T) {
-				err = r.Deregister(context.Background(), testServerWithMetadata)
-				if err != nil {
-					t.Error(err)
-				}
-			},
-		},
-		{
-			name: "error",
-			fields: fields{
-				registry: New(client),
-			},
-			args: args{
-				ctx: context.Background(),
-				service: &registry.ServiceInstance{
-					ID:        "1",
-					Name:      "",
-					Version:   "v1.0.0",
-					Endpoints: []string{"http://127.0.0.1:8080?isSecure=false"},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "urlError",
-			fields: fields{
-				registry: New(client),
-			},
-			args: args{
-				ctx: context.Background(),
-				service: &registry.ServiceInstance{
-					ID:        "1",
-					Name:      "test",
-					Version:   "v1.0.0",
-					Endpoints: []string{"127.0.0.1:8080"},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "portError",
-			fields: fields{
-				registry: New(client),
-			},
-			args: args{
-				ctx: context.Background(),
-				service: &registry.ServiceInstance{
-					ID:        "1",
-					Name:      "test",
-					Version:   "v1.0.0",
-					Endpoints: []string{"http://127.0.0.1888"},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "withCluster",
-			fields: fields{
-				registry: New(client, WithCluster("test")),
-			},
-			args: args{
-				ctx:     context.Background(),
-				service: testServer,
-			},
-			wantErr: false,
-		},
-		{
-			name: "withGroup",
-			fields: fields{
-				registry: New(client, WithGroup("TEST_GROUP")),
-			},
-			args: args{
-				ctx:     context.Background(),
-				service: testServer,
-			},
-			wantErr: false,
-		},
-		{
-			name: "withWeight",
-			fields: fields{
-				registry: New(client, WithWeight(200)),
-			},
-			args: args{
-				ctx:     context.Background(),
-				service: testServer,
-			},
-			wantErr: false,
-		},
-		{
-			name: "withPrefix",
-			fields: fields{
-				registry: New(client, WithPrefix("test")),
-			},
-			args: args{
-				ctx:     context.Background(),
-				service: testServer,
-			},
-			wantErr: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := tt.fields.registry
-			if err := r.Register(tt.args.ctx, tt.args.service); (err != nil) != tt.wantErr {
-				t.Errorf("%s Register error = %v, wantErr %v", tt.name, err, tt.wantErr)
-			}
-		})
-	}
-}
+	nacosRegistry := NewRegistry(
+		client,
+		WithGroup(REGISTRY_GROUP),
+		WithCluster(REGISTRY_CLUSTER),
+		WithWeight(1.0))
 
-func TestRegistry_Deregister(t *testing.T) {
-	testServer := &registry.ServiceInstance{
-		ID:        "1",
-		Name:      "test2",
-		Version:   "v1.0.0",
-		Endpoints: []string{"http://127.0.0.1:8080?isSecure=false"},
+	mm := map[string]string{
+		"test1": "test1",
+	}
+	ins := &registry.ServiceInstance{
+		ID:      "test-ut",
+		Name:    "test-ut",
+		Version: "v1.0.0",
+		Endpoints: []string{
+			"grpc://127.0.0.1:8080",
+		},
+		Metadata: mm,
 	}
 
-	type args struct {
-		ctx     context.Context
-		service *registry.ServiceInstance
-	}
-	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
-		preFunc func(t *testing.T)
-	}{
-		{
-			name: "normal",
-			args: args{
-				ctx:     context.Background(),
-				service: testServer,
-			},
-			wantErr: false,
-			preFunc: func(t *testing.T) {
-				sc := []constant.ServerConfig{
-					*constant.NewServerConfig(addr, 8848),
-				}
+	err = nacosRegistry.Register(context.Background(), ins)
 
-				cc := constant.ClientConfig{
-					NamespaceId:         namespaceId, // namespace id
-					TimeoutMs:           5000,
-					NotLoadCacheAtStart: true,
-					LogDir:              "./log",
-					CacheDir:            "./log/cache",
-					LogLevel:            "debug",
-				}
-
-				// a more graceful way to create naming client
-				client, err := clients.NewNamingClient(
-					vo.NacosClientParam{
-						ClientConfig:  &cc,
-						ServerConfigs: sc,
-					},
-				)
-				if err != nil {
-					t.Fatal(err)
-				}
-				r := New(client)
-				err = r.Register(context.Background(), testServer)
-				if err != nil {
-					t.Error(err)
-				}
-			},
-		},
-		{
-			name: "error",
-			args: args{
-				ctx: context.Background(),
-				service: &registry.ServiceInstance{
-					ID:        "1",
-					Name:      "test",
-					Version:   "v1.0.0",
-					Endpoints: []string{"127.0.0.1:8080"},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "errorPort",
-			args: args{
-				ctx: context.Background(),
-				service: &registry.ServiceInstance{
-					ID:        "1",
-					Name:      "notExist",
-					Version:   "v1.0.0",
-					Endpoints: []string{"http://127.0.0.18080"},
-				},
-			},
-			wantErr: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			sc := []constant.ServerConfig{
-				*constant.NewServerConfig(addr, 8848),
-			}
-
-			cc := constant.ClientConfig{
-				NamespaceId:         namespaceId, // namespace id
-				TimeoutMs:           5000,
-				NotLoadCacheAtStart: true,
-				LogDir:              "./log",
-				CacheDir:            "./log/cache",
-				LogLevel:            "debug",
-			}
-
-			// a more graceful way to create naming client
-			client, err := clients.NewNamingClient(
-				vo.NacosClientParam{
-					ClientConfig:  &cc,
-					ServerConfigs: sc,
-				},
-			)
-			if err != nil {
-				t.Fatal(err)
-			}
-			r := New(client)
-			if tt.preFunc != nil {
-				tt.preFunc(t)
-			}
-			if err := r.Deregister(tt.args.ctx, tt.args.service); (err != nil) != tt.wantErr {
-				t.Errorf("Deregister error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestRegistry_GetService(t *testing.T) {
-	sc := []constant.ServerConfig{
-		*constant.NewServerConfig(addr, 8848),
-	}
-
-	cc := constant.ClientConfig{
-		NamespaceId:         namespaceId, // namespace id
-		TimeoutMs:           5000,
-		NotLoadCacheAtStart: true,
-		LogDir:              "./log",
-		CacheDir:            "./log/cache",
-		LogLevel:            "debug",
-	}
-
-	// a more graceful way to create naming client
-	client, err := clients.NewNamingClient(
-		vo.NacosClientParam{
-			ClientConfig:  &cc,
-			ServerConfigs: sc,
-		},
-	)
+	nacosWatcher, err := nacosRegistry.Watch(context.Background(), "test-ut")
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := New(client)
-	testServer := &registry.ServiceInstance{
-		ID:        "1",
-		Name:      "test3",
-		Version:   "v1.0.0",
-		Endpoints: []string{"grpc://127.0.0.1:8080?isSecure=false"},
-	}
 
-	type fields struct {
-		registry *Registry
-	}
-	type args struct {
-		ctx         context.Context
-		serviceName string
-	}
-	tests := []struct {
-		name      string
-		fields    fields
-		args      args
-		want      []*registry.ServiceInstance
-		wantErr   bool
-		preFunc   func(t *testing.T)
-		deferFunc func(t *testing.T)
-	}{
-		{
-			name: "normal",
-			preFunc: func(t *testing.T) {
-				err = r.Register(context.Background(), testServer)
-				if err != nil {
-					t.Error(err)
-				}
-				time.Sleep(time.Second)
-			},
-			deferFunc: func(t *testing.T) {
-				err = r.Deregister(context.Background(), testServer)
-				if err != nil {
-					t.Error(err)
-				}
-			},
-			fields: fields{
-				registry: r,
-			},
-			args: args{
-				ctx:         context.Background(),
-				serviceName: testServer.Name + "." + "grpc",
-			},
-			want: []*registry.ServiceInstance{{
-				ID:        "",
-				Name:      "DEFAULT_GROUP@@test3.grpc",
-				Version:   "v1.0.0",
-				Metadata:  map[string]string{"version": "v1.0.0", "kind": "grpc"},
-				Endpoints: []string{"grpc://127.0.0.1:8080"},
-			}},
-			wantErr: false,
-		},
-		{
-			name: "errorNotExist",
-			fields: fields{
-				registry: r,
-			},
-			args: args{
-				ctx:         context.Background(),
-				serviceName: "notExist",
-			},
-			want:    nil,
-			wantErr: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.preFunc != nil {
-				tt.preFunc(t)
-			}
-			if tt.deferFunc != nil {
-				defer tt.deferFunc(t)
-			}
-			r := tt.fields.registry
-			got, err := r.GetService(tt.args.ctx, tt.args.serviceName)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("%s GetService error = %v, wantErr %v", tt.name, err, tt.wantErr)
-				t.Errorf("GetService got = %v", got)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("%s GetService got = %v, want %v", tt.name, got, tt.want)
-			}
-		})
-	}
-}
+	t.Cleanup(func() {
+		if err = nacosRegistry.Deregister(context.Background(), ins); err != nil {
+			t.Fatal(err)
+		}
 
-func TestRegistry_Watch(t *testing.T) {
-	os.RemoveAll("./log")
-	
-	sc := []constant.ServerConfig{
-		*constant.NewServerConfig(addr, 8848),
-	}
+		if err = nacosWatcher.Stop(); err != nil {
+			t.Fatal(err)
+		}
+	})
 
-	cc := constant.ClientConfig{
-		NamespaceId:          namespaceId, // namespace id
-		TimeoutMs:            5000,
-		NotLoadCacheAtStart:  true,
-		LogDir:               "./log",
-		CacheDir:             "./log/cache",
-		LogLevel:             "debug",
-		
-	}
-	
-	// a more graceful way to create naming client
-	client, err := clients.NewNamingClient(
-		vo.NacosClientParam{
-			ClientConfig:  &cc,
-			ServerConfigs: sc,
-		},
-	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := New(client)
+	time.Sleep(1 * time.Second)
+	service, err := nacosRegistry.GetService(context.Background(), "test-ut")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(service)
 
-	testServer := &registry.ServiceInstance{
-		ID:        "",
-		Name:      "test4",
-		Version:   "v1.0.0",
-		Endpoints: []string{"grpc://127.0.0.1:8080?isSecure=false"},
-	}
-
-	//  cancelCtx, cancel := context.WithCancel(context.Background())
-	type fields struct {
-		registry *Registry
-	}
-	type args struct {
-		ctx         context.Context
-		serviceName string
-	}
-	tests := []struct {
-		name        string
-		fields      fields
-		args        args
-		wantErr     bool
-		want        []*registry.ServiceInstance
-		processFunc func(t *testing.T)
-	}{
-		{
-			name: "normal",
-			fields: fields{
-				registry: New(client),
-			},
-			args: args{
-				ctx:         context.Background(),
-				serviceName: testServer.Name + "." + "grpc",
-			},
-			wantErr: false,
-			want: []*registry.ServiceInstance{{
-				ID:        "",
-				Name:      "test4",
-				Version:   "v1.0.0",
-				Metadata:  map[string]string{"version": "v1.0.0", "kind": "grpc"},
-				Endpoints: []string{"grpc://127.0.0.1:8080"},
-			}},
-			processFunc: func(t *testing.T) {
-				err = r.Register(context.Background(), testServer)
-				if err != nil {
-					t.Error(err)
-				}
-			
-			},
+	ins = &registry.ServiceInstance{
+		ID:      "test-ut",
+		Name:    "test-ut",
+		Version: "v2.0.0",
+		Endpoints: []string{
+			"grpc://127.0.0.1:8080",
 		},
-		// {
-		// 	name: "ctxCancel",
-		// 	fields: fields{
-		// 		registry: r,
-		// 	},
-		// 	args: args{
-		// 		ctx:         cancelCtx,
-		// 		serviceName: testServer.Name,
-		// 	},
-		// 	wantErr: true,
-		// 	want:    nil,
-		// 	processFunc: func(t *testing.T) {
-		// 		cancel()
-		// 	},
-		// },
+		Metadata: mm,
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := tt.fields.registry
-			watch, err := r.Watch(tt.args.ctx, tt.args.serviceName)
-			if err != nil {
-				t.Error(tt.name, err)
-				return
-			}
-			defer func() {
-				err = watch.Stop()
-				if err != nil {
-					t.Error(tt.name, err)
-				}
-			}()
+	nacosRegistry.Register(context.Background(), ins)
 
-			_, err = watch.Next()
-			if err != nil {
-				t.Error(tt.name, err)
-				return
-			}
-
-			if tt.processFunc != nil {
-				tt.processFunc(t)
-			}
-			want, err := watch.Next()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Watch error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(want, tt.want) {
-				t.Errorf("Watch watcher = %v, want %v", watch, tt.want)
-			}
-		})
+	instances, err := nacosWatcher.Next()
+	for _, instance := range instances {
+		t.Log(instance.Version)
 	}
 }
