@@ -63,11 +63,12 @@ type Registry struct {
 	opts options
 	cli  naming_client.INamingClient
 }
-// NewRegistry new a nacos registry.
-func NewRegistry(cli naming_client.INamingClient, opts ...Option) (r *Registry) {
+
+// New new a nacos registry.
+func New(cli naming_client.INamingClient, opts ...Option) (r *Registry) {
 	op := options{
 		prefix:  "/microservices",
-		cluster: "DEFAULT",
+		cluster: "",
 		group:   constant.DEFAULT_GROUP,
 		weight:  100,
 		kind:    "grpc",
@@ -116,7 +117,7 @@ func (r *Registry) Register(_ context.Context, si *registry.ServiceInstance) err
 		_, e := r.cli.RegisterInstance(vo.RegisterInstanceParam{
 			Ip:          host,
 			Port:        uint64(p),
-			ServiceName: si.Name,
+			ServiceName: si.Name + "." + u.Scheme,
 			Weight:      r.opts.weight,
 			Enable:      true,
 			Healthy:     true,
@@ -150,7 +151,7 @@ func (r *Registry) Deregister(_ context.Context, service *registry.ServiceInstan
 		if _, err = r.cli.DeregisterInstance(vo.DeregisterInstanceParam{
 			Ip:          host,
 			Port:        uint64(p),
-			ServiceName: service.Name,
+			ServiceName: service.Name + "." + u.Scheme,
 			GroupName:   r.opts.group,
 			Cluster:     r.opts.cluster,
 			Ephemeral:   true,
@@ -161,7 +162,7 @@ func (r *Registry) Deregister(_ context.Context, service *registry.ServiceInstan
 	return nil
 }
 
-// Watch creates a subscriber according to the service name.
+// Watch creates a watcher according to the service name.
 func (r *Registry) Watch(ctx context.Context, serviceName string) (registry.Watcher, error) {
 	return newWatcher(ctx, r.cli, serviceName, r.opts.group, r.opts.kind, []string{r.opts.cluster})
 }
@@ -171,7 +172,6 @@ func (r *Registry) GetService(_ context.Context, serviceName string) ([]*registr
 	res, err := r.cli.SelectInstances(vo.SelectInstancesParam{
 		ServiceName: serviceName,
 		GroupName:   r.opts.group,
-		Clusters:    []string{r.opts.cluster},
 		HealthyOnly: true,
 	})
 	if err != nil {
